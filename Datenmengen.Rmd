@@ -1,0 +1,22 @@
+---
+title: "Datenmengen"
+author: "Daniel Zimmermann / David Lilek"
+output:
+  html_document:
+    df_print: paged
+    fig.align: center
+    self_contained: yes
+    fig.height: 4
+    fig.width: 8
+    theme: united
+    toc: yes
+    toc_depth: 4
+    toc_float: yes
+    number_sections: no
+    code_folding: hide
+---
+
+```{r}
+
+```
+
