@@ -45,6 +45,58 @@ data$hos=""
 data$hos[sample(which(data$variant == "alpha"),length(hos_alpha))] <- hos_alpha
 data$hos[sample(which(data$variant == "delta"),length(hos_delta))] <- hos_delta
 
+######hospitalisation
+
+#use categorial variables
+h_alpha <- replicate(764,"HOS")
+h_delta <- replicate(196,"HOS")
+er_alpha <- replicate(1148,"ER") #er = emergency care
+er_delta <- replicate(498,"ER")
+
+#use integers 0=no hospitalisation, 1=hos, 2=er -> needed for cox regression
+h_alpha <- replicate(764,1)
+h_delta <- replicate(196,1)
+er_alpha <- replicate(1148,2) #er = emergency care
+er_delta <- replicate(498,2)
+
+#combine and sample variable
+hos_alpha <- c(h_alpha,er_alpha)
+hos_alpha <- sample(hos_alpha)
+hos_delta <- c(h_delta,er_delta)
+hos_delta <- sample(hos_delta)
+
+#in this case random assignment isn't the best way because symptomatic disease progression would lead to higher hospitalization rates than aysmptomatic disease progression
+data$hos=0
+data$hos[sample(which(data$variant == "alpha"),length(hos_alpha))] <- hos_alpha
+data$hos[sample(which(data$variant == "delta"),length(hos_delta))] <- hos_delta
+
+#create time of hospitalisation
+#article days symptoms to admission hospital
+#https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7589278/
+data$time=0
+data$time[which(data$hos==1 | data$hos==2)]<-sample(5:14,length(hos_alpha)+length(hos_delta),replace = TRUE)
+
+
+#---------------------------------------------------------------
+#Cox Regression
+#http://www.sthda.com/english/wiki/cox-proportional-hazards-model
+library("survival")
+library("survminer")
+
+#example data
+# lung <- lung
+# head(lung)
+# res.cox <- coxph(Surv(time, status) ~ sex, data = lung)
+# res.cox
+# summary(res.cox)
+
+#own data
+coxph(Surv(time,hos)~variant, data = data)
+
+
+
+
+
 
 #-----------------------------------------------
 #draft
