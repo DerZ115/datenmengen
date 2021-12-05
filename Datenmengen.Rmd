@@ -100,18 +100,24 @@ data$hos[sample(which(data$variant == "delta"),length(hos_delta))] <- hos_delta
 #create time of hospitalisation
 #article days symptoms to admission hospital
 #https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7589278/
-data$time=0
+data$time_equal=0
 #equally distributed
-data$time[which(data$hos==1 | data$hos==2)]<-sample(5:14,length(hos_alpha)+length(hos_delta),replace = TRUE)
+data$time_equal[which(data$hos==1 | data$hos==2)]<-sample(5:14,length(hos_alpha)+length(hos_delta),replace = TRUE)
 #right skewed
-data$time[which(data$hos==1 | data$hos==2)]<-sample(rbeta((length(hos_alpha)+length(hos_delta)),2,6)*14)
+data$time_skewed=0
+data$time_skewed[which(data$hos==1 | data$hos==2)]<-sample(rbeta((length(hos_alpha)+length(hos_delta)),2,6)*14)
+#right skewed v002
+# a bit different to get rid of hospitalzation on day 0-2
+data$time_skewed_v002=0
+data$time_skewed_v002[which(data$hos==1 | data$hos==2)]<-sample(rbeta((length(hos_alpha)+length(hos_delta)),2,6)*12+2)
 ```
 
 # Cox Regression
 
 * [CoxRegression](http://www.sthda.com/english/wiki/cox-proportional-hazards-model)
+* [CoxModelAssumptions](http://www.sthda.com/english/wiki/cox-model-assumptions)
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 #---------------------------------------------------------------
 #Cox Regression
 
@@ -125,8 +131,34 @@ library("survminer")
 # res.cox
 # summary(res.cox)
 
-#own data
-coxph(Surv(time,hos)~variant, data = data)
+#own data equal distributed
+res.cox_equal <- coxph(Surv(time_equal,hos)~variant, data = data)
+summary(res.cox_equal)
+ggsurvplot(survfit(res.cox_equal), data = data, color = "#2E9FDF",
+           ggtheme = theme_minimal())
+#own data right skewed
+res.cox_skewed <- coxph(Surv(time_skewed,hos)~variant, data = data)
+summary(res.cox_skewed)
+ggsurvplot(survfit(res.cox_skewed), data = data, color = "#2E9FDF",
+           ggtheme = theme_minimal())
+#own data right skewed
+res.cox_skewed_v002 <- coxph(Surv(time_skewed_v002,hos)~variant, data = data)
+summary(res.cox_skewed_v002)
+ggsurvplot(survfit(res.cox_skewed_v002), data = data, color = "#2E9FDF",
+           ggtheme = theme_minimal())
+
+```
+
+* Testing the [Assumptions](http://www.sthda.com/english/wiki/cox-model-assumptions)
+  + p values should be higher than 0.05 (significance level)
+```{r}
+test.ph <- cox.zph(res.cox_skewed)
+test.ph
+ggcoxzph(test.ph)
+ggcoxdiagnostics(res.cox_skewed, type = "dfbeta",
+                 linear.predictions = FALSE, ggtheme = theme_bw())
+ggcoxdiagnostics(res.cox_skewed, type = "deviance",
+                 linear.predictions = FALSE, ggtheme = theme_bw())
 ```
 
 
