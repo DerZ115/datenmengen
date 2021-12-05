@@ -115,6 +115,7 @@ data$time_skewed_v002[which(data$hos==1 | data$hos==2)]<-sample(rbeta((length(ho
 # Cox Regression
 
 * [CoxRegression](http://www.sthda.com/english/wiki/cox-proportional-hazards-model)
+* [CoxRegression](https://sphweb.bumc.bu.edu/otlt/mph-modules/bs/bs704_survival/BS704_Survival6.html)
 * [CoxModelAssumptions](http://www.sthda.com/english/wiki/cox-model-assumptions)
 
 ```{r message=FALSE, warning=FALSE}
