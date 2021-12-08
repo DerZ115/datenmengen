@@ -23,6 +23,10 @@ output:
   + found this [article](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7589278/)
   + it is a bit age-depended but overall it seems to be right skewed
   + [here](https://stackoverflow.com/questions/28099590/create-sample-vector-data-in-r-with-a-skewed-distribution-with-limited-range) i found how to create skewed data-sets
+* sex
+  + it seems as stated below in the comments than men are higher affected than women but don't know yet how to consider this in a useful way
+* age
+  + tried something but its random and doesnt take other variables into account
 
 ```{r}
 #set.seed
@@ -72,6 +76,7 @@ data$hos=""
 data$hos[sample(which(data$variant == "alpha"),length(hos_alpha))] <- hos_alpha
 data$hos[sample(which(data$variant == "delta"),length(hos_delta))] <- hos_delta
 
+#--------------------------------------------------------------------
 ######hospitalisation
 
 #use categorial variables
@@ -81,6 +86,8 @@ er_alpha <- replicate(1148,"ER") #er = emergency care
 er_delta <- replicate(498,"ER")
 
 #use integers 0=no hospitalisation, 1=hos, 2=er -> needed for cox regression
+#1: Hospital admission within 14 days after specimen
+#2: Hospital admission or emergency care attendance within 14 days after specimen
 h_alpha <- replicate(764,1)
 h_delta <- replicate(196,1)
 er_alpha <- replicate(1148,2) #er = emergency care
@@ -97,9 +104,12 @@ data$hos=0
 data$hos[sample(which(data$variant == "alpha"),length(hos_alpha))] <- hos_alpha
 data$hos[sample(which(data$variant == "delta"),length(hos_delta))] <- hos_delta
 
+#-------------------------------------------------------------------
 #create time of hospitalisation
 #article days symptoms to admission hospital
 #https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7589278/
+#because of this maybe skewed might be more suitable
+#only people which are hospitaled get values all which data$hos==0 get a 0 value
 data$time_equal=0
 #equally distributed
 data$time_equal[which(data$hos==1 | data$hos==2)]<-sample(5:14,length(hos_alpha)+length(hos_delta),replace = TRUE)
@@ -110,13 +120,129 @@ data$time_skewed[which(data$hos==1 | data$hos==2)]<-sample(rbeta((length(hos_alp
 # a bit different to get rid of hospitalzation on day 0-2
 data$time_skewed_v002=0
 data$time_skewed_v002[which(data$hos==1 | data$hos==2)]<-sample(rbeta((length(hos_alpha)+length(hos_delta)),2,6)*12+2)
+
+
+#---------------------------------
+#vaccination status
+#Unvaccinated                                 0
+#<21 days after first vaccination dose        1
+#≥21 days after first vaccination dose        2
+#≥14 days after second vaccination dose       3
+vac_alpha <- replicate(25823,0)
+vac_alpha <- c(vac_alpha,replicate(2206,1))
+vac_alpha <- c(vac_alpha,replicate(6172,2))
+vac_alpha <- c(vac_alpha,replicate(455,3))
+vac_alpha <- sample(vac_alpha)
+vac_delta <- replicate(6255,0)
+vac_delta <- c(vac_delta,replicate(426,1))
+vac_delta <- c(vac_delta,replicate(1662,2))
+vac_delta <- c(vac_delta,replicate(339,3))
+vac_delta <- sample(vac_delta)
+
+data$vac=NA
+data$vac[sample(which(data$variant == "alpha"),length(vac_alpha))] <- vac_alpha
+data$vac[sample(which(data$variant == "delta"),length(vac_delta))] <- vac_delta
+#check if it is correct
+#table(data$vac[which(data$variant=="alpha")])
+#table(data$vac[which(data$variant=="delta")])
+data$vac_update <- data$vac
+data$vac_update[data$vac<1]<-1
+data$vac_update[data$vac>2]<-2
+
+#-----------------------------------------------------------
+#sex
+#it seems that men are more affected than women
+#In the public data set, the number of men who died from COVID-19 is 2.4 times that of women 
+#https://www.worldometers.info/coronavirus/coronavirus-age-sex-demographics/
+#https://www.frontiersin.org/articles/10.3389/fpubh.2020.00152/full
+#https://www.nature.com/articles/s41467-020-19741-6
+#now the code randomly assings male and female to the status and didnt account for the statement above
+female_alpha <- replicate(17913,1)
+female_delta <- replicate(4249,1)
+male_alpha <- replicate(16743,2)
+male_delta <- replicate(4433,2)
+sex_delta <- c(female_delta,male_delta)
+sex_delta <- sample(sex_delta)
+sex_alpha <- c(female_alpha,male_alpha)
+sex_alpha <- sample(sex_alpha)
+
+data$sex=0
+data$sex[sample(which(data$variant == "alpha"),length(sex_alpha))] <- sex_alpha
+data$sex[sample(which(data$variant == "delta"),length(sex_delta))] <- sex_delta
+
+#check if it is correct
+#table(data$sex[which(data$variant=="alpha")])
+#table(data$sex[which(data$variant=="delta")])
+
+#----------------------------------------------------------------
+#age
+a1 <- sample(0:9,3564, replace = TRUE)
+a2 <- sample(10:19,9462, replace = TRUE)
+a3 <- sample(20:29,7636, replace = TRUE)
+a4 <- sample(30:39,9157, replace = TRUE)
+a5 <- sample(40:49,6885, replace = TRUE)
+a6 <- sample(50:59,3916, replace = TRUE)
+a7 <- sample(60:69,1681, replace = TRUE)
+a8 <- sample(70:79,584, replace = TRUE)
+a9 <- sample(80:100,453, replace = TRUE)
+age <- c(a1,a2,a3,a4,a5,a6,a7,a8,a9)
+age <- sample(age)
+data$age <- age
 ```
+
+# Visualization 
+
+```{r}
+library(ggplot2)
+#vaccination status
+p<-ggplot(data=data, aes(fill=factor(vac), x=variant, y=vac)) +
+  geom_bar(stat="identity")+
+  scale_fill_discrete(name = "Vac Status", labels = c("None", "<21d 1st dose", ">21d 1st dose",">14d 2nd dose"))+
+  ggtitle("Vaccination status at date of specimen")
+p
+#sex variant
+p<-ggplot(data=data, aes(fill=factor(sex), x=variant, y=sex)) +
+  geom_bar(stat="identity")+
+  scale_fill_discrete(name = "Sex", labels = c("Female", "Male"))+
+  ggtitle("Sex - Variant")
+p
+#time of hospitalisation
+p <- ggplot() +
+    geom_jitter(data=data[which(data$time_skewed>0),], aes(x=1, y=time_skewed, color=variant)) 
+p
+# age
+p<-ggplot(data, aes(x=age, fill=factor(sex))) +
+  geom_histogram(alpha = 0.5, position = "dodge")+
+  theme(legend.position="right")+
+  scale_fill_discrete(name = "Sex", labels = c("Female", "Male"))+
+  ggtitle("Age Distribution")
+p
+```
+
 
 # Cox Regression
 
 * [CoxRegression](http://www.sthda.com/english/wiki/cox-proportional-hazards-model)
 * [CoxRegression](https://sphweb.bumc.bu.edu/otlt/mph-modules/bs/bs704_survival/BS704_Survival6.html)
 * [CoxModelAssumptions](http://www.sthda.com/english/wiki/cox-model-assumptions)
+* [Creating Survival Plots - Cheat Sheet](https://raw.githubusercontent.com/rstudio/cheatsheets/main/survminer.pdf)
+* [CoxRegression nice plotting example](https://rviews.rstudio.com/2017/09/25/survival-analysis-with-r/)
+
+## Cox Regression Table2
+
+* MISSING: adjusted p value: regression adjustment for 
+  + age (linear)
+  + date (linear)
+  + sex
+  + index of multiple deprivation
+  + and international traveller status.
+
+### Frist try
+
+* table2 I used 0,1,2 for hospitalization
+* but it should be 2 models 0-1 and 0-2
+* in this first try I tested 3 different time simulations: equal, skewed, skewed_v002 
+* for this first try I also tested the assumptions
 
 ```{r message=FALSE, warning=FALSE}
 #---------------------------------------------------------------
@@ -150,6 +276,12 @@ ggsurvplot(survfit(res.cox_skewed_v002), data = data, color = "#2E9FDF",
 
 ```
 
+```{r}
+# visualize hazard ratio
+ggforest(res.cox_skewed, data = data)
+```
+
+
 * Testing the [Assumptions](http://www.sthda.com/english/wiki/cox-model-assumptions)
   + p values should be higher than 0.05 (significance level)
 ```{r}
@@ -162,7 +294,150 @@ ggcoxdiagnostics(res.cox_skewed, type = "deviance",
                  linear.predictions = FALSE, ggtheme = theme_bw())
 ```
 
+### Second try
 
+* here I built 2 models which is exactly what we want 
+* first model uses hos==1 
+  + in the paper they get a HR of 1·03 (0·88–1·21)
+  + we got 0.9608 (0.8208-1.125)
+* second model uses Hos==2
+  + in the paper they get a HR of 1·39 (1·25–1·53)
+  + we got 1.121 (1.009-1.246)
+
+```{r message=FALSE, warning=FALSE}
+#---------------------------------------------------------------
+#Cox Regression
+#own data right skewed
+res.cox_skewed <- coxph(Surv(time_skewed,hos)~variant, data = data[data$hos==1,])
+summary(res.cox_skewed)
+# visualize hazard ratio
+ggforest(res.cox_skewed, data = data)
+```
+
+```{r message=FALSE, warning=FALSE}
+#---------------------------------------------------------------
+#Cox Regression
+#own data right skewed
+res.cox_skewed <- coxph(Surv(time_skewed,hos)~variant, data = data[data$hos==2,])
+summary(res.cox_skewed)
+# visualize hazard ratio
+ggforest(res.cox_skewed, data = data)
+```
+
+### Table 2 - adjusted p values
+
+* here I only simulated sex and take this into account
+
+```{r message=FALSE, warning=FALSE}
+#res.cox <- coxph(Surv(time, status) ~ age + sex + ph.ecog, data =  lung)
+#own data right skewed
+res.cox_skewed <- coxph(Surv(time_skewed,hos,sex)~variant, data = data[data$hos==1,])
+summary(res.cox_skewed)
+# visualize hazard ratio
+ggforest(res.cox_skewed, data = data)
+```
+
+
+## Cox Regression Table 3
+
+### Used hos=1 and vac<2
+
+* hos=1:
+* vac<2 means: Unvaccinated or <21 days after first vaccination dose
+* don't know which one is correct: data$vac contains 0 and 1 and I put all 0 and 1 in a new column vac_update and coded it with 1 -> this leads to different results
+
+```{r}
+#skewed data 
+#skewed data 
+res.cox_vac <- coxph(Surv(time_skewed,vac)~variant, data = data[data$hos==1 & data$vac <2,])
+summary(res.cox_vac)
+ggsurvplot(survfit(res.cox_vac), data = data, color = "#2E9FDF",
+           ggtheme = theme_minimal())
+```
+
+### used hos=1 and vac_update == 1
+
+```{r}
+#skewed data 
+#skewed data 
+res.cox_vac <- coxph(Surv(time_skewed,vac_update)~variant, data = data[data$hos==1 & data$vac_update == 1,])
+summary(res.cox_vac)
+ggsurvplot(survfit(res.cox_vac), data = data, color = "#2E9FDF",
+           ggtheme = theme_minimal())
+```
+
+### used hos=1 and vac_update == 2
+
+```{r}
+#skewed data 
+#skewed data 
+res.cox_vac <- coxph(Surv(time_skewed,vac_update)~variant, data = data[data$hos==1 & data$vac_update == 2,])
+summary(res.cox_vac)
+ggsurvplot(survfit(res.cox_vac), data = data, color = "#2E9FDF",
+           ggtheme = theme_minimal())
+```
+
+### used hos=2 and vac<2
+
+* hos=2:
+* vac<2 means: Unvaccinated or <21 days after first vaccination dose
+
+```{r}
+#skewed data 
+res.cox_vac <- coxph(Surv(time_skewed,vac)~variant, data = data[data$hos==2 & data$vac <2,])
+summary(res.cox_vac)
+ggsurvplot(survfit(res.cox_vac), data = data, color = "#2E9FDF",
+           ggtheme = theme_minimal())
+```
+
+### hos =1 vac == 2
+* hos=1:
+* vac>1 means: ≥21 days after first vaccination dose with or without second vaccination dose
+* `data$vac > 2` this doesn't work yet but don't know why 
+* `data$vac == 2` works but I think we also want `data$vac==3`
+
+```{r}
+#skewed data 
+res.cox_vac <- coxph(Surv(time_skewed,vac)~variant, data = data[data$hos==1 & data$vac == 2,])
+summary(res.cox_vac)
+ggsurvplot(survfit(res.cox_vac), data = data, color = "#2E9FDF",
+           ggtheme = theme_minimal())
+```
+
+### hos=2 vac ==2
+* hos=2:
+* vac>1 means: ≥21 days after first vaccination dose with or without second vaccination dose
+* same as above >2 doesn't work
+
+```{r}
+#skewed data 
+res.cox_vac <- coxph(Surv(time_skewed,vac)~variant, data = data[data$hos==2 & data$vac==2,])
+summary(res.cox_vac)
+ggsurvplot(survfit(res.cox_vac), data = data, color = "#2E9FDF",
+           ggtheme = theme_minimal())
+```
+
+### used hos=2 and vac_update == 1
+
+```{r}
+#skewed data 
+#skewed data 
+res.cox_vac <- coxph(Surv(time_skewed,vac_update)~variant, data = data[data$hos==2 & data$vac_update == 1,])
+summary(res.cox_vac)
+ggsurvplot(survfit(res.cox_vac), data = data, color = "#2E9FDF",
+           ggtheme = theme_minimal())
+```
+
+### used hos=2 and vac_update == 2
+
+```{r}
+#skewed data 
+#skewed data 
+res.cox_vac <- coxph(Surv(time_skewed,vac_update)~variant, data = data[data$hos==2 & data$vac_update == 2,])
+summary(res.cox_vac)
+ggsurvplot(survfit(res.cox_vac), data = data, color = "#2E9FDF",
+           ggtheme = theme_minimal())
+```
 
 # DRAFT Code for Age
 
