@@ -261,17 +261,17 @@ library("survminer")
 #own data equal distributed
 res.cox_equal <- coxph(Surv(time_equal,hos)~variant, data = data)
 summary(res.cox_equal)
-ggsurvplot(survfit(res.cox_equal), data = data, color = "#2E9FDF",
+ggsurvplot(survfit(res.cox_equal), data = data, palette = "#2E9FDF",
            ggtheme = theme_minimal())
 #own data right skewed
 res.cox_skewed <- coxph(Surv(time_skewed,hos)~variant, data = data)
 summary(res.cox_skewed)
-ggsurvplot(survfit(res.cox_skewed), data = data, color = "#2E9FDF",
+ggsurvplot(survfit(res.cox_skewed), data = data, palette = "#2E9FDF",
            ggtheme = theme_minimal())
 #own data right skewed
 res.cox_skewed_v002 <- coxph(Surv(time_skewed_v002,hos)~variant, data = data)
 summary(res.cox_skewed_v002)
-ggsurvplot(survfit(res.cox_skewed_v002), data = data, color = "#2E9FDF",
+ggsurvplot(survfit(res.cox_skewed_v002), data = data, palette = "#2E9FDF",
            ggtheme = theme_minimal())
 
 ```
@@ -351,7 +351,7 @@ ggforest(res.cox_skewed, data = data)
 #skewed data 
 res.cox_vac <- coxph(Surv(time_skewed,vac)~variant, data = data[data$hos==1 & data$vac <2,])
 summary(res.cox_vac)
-ggsurvplot(survfit(res.cox_vac), data = data, color = "#2E9FDF",
+ggsurvplot(survfit(res.cox_vac), data = data, palette = "#2E9FDF",
            ggtheme = theme_minimal())
 ```
 
@@ -362,7 +362,7 @@ ggsurvplot(survfit(res.cox_vac), data = data, color = "#2E9FDF",
 #skewed data 
 res.cox_vac <- coxph(Surv(time_skewed,vac_update)~variant, data = data[data$hos==1 & data$vac_update == 1,])
 summary(res.cox_vac)
-ggsurvplot(survfit(res.cox_vac), data = data, color = "#2E9FDF",
+ggsurvplot(survfit(res.cox_vac), data = data, palette = "#2E9FDF",
            ggtheme = theme_minimal())
 ```
 
@@ -373,7 +373,7 @@ ggsurvplot(survfit(res.cox_vac), data = data, color = "#2E9FDF",
 #skewed data 
 res.cox_vac <- coxph(Surv(time_skewed,vac_update)~variant, data = data[data$hos==1 & data$vac_update == 2,])
 summary(res.cox_vac)
-ggsurvplot(survfit(res.cox_vac), data = data, color = "#2E9FDF",
+ggsurvplot(survfit(res.cox_vac), data = data, palette = "#2E9FDF",
            ggtheme = theme_minimal())
 ```
 
@@ -386,7 +386,7 @@ ggsurvplot(survfit(res.cox_vac), data = data, color = "#2E9FDF",
 #skewed data 
 res.cox_vac <- coxph(Surv(time_skewed,vac)~variant, data = data[data$hos==2 & data$vac <2,])
 summary(res.cox_vac)
-ggsurvplot(survfit(res.cox_vac), data = data, color = "#2E9FDF",
+ggsurvplot(survfit(res.cox_vac), data = data, palette = "#2E9FDF",
            ggtheme = theme_minimal())
 ```
 
@@ -400,7 +400,7 @@ ggsurvplot(survfit(res.cox_vac), data = data, color = "#2E9FDF",
 #skewed data 
 res.cox_vac <- coxph(Surv(time_skewed,vac)~variant, data = data[data$hos==1 & data$vac == 2,])
 summary(res.cox_vac)
-ggsurvplot(survfit(res.cox_vac), data = data, color = "#2E9FDF",
+ggsurvplot(survfit(res.cox_vac), data = data, palette = "#2E9FDF",
            ggtheme = theme_minimal())
 ```
 
@@ -413,7 +413,7 @@ ggsurvplot(survfit(res.cox_vac), data = data, color = "#2E9FDF",
 #skewed data 
 res.cox_vac <- coxph(Surv(time_skewed,vac)~variant, data = data[data$hos==2 & data$vac==2,])
 summary(res.cox_vac)
-ggsurvplot(survfit(res.cox_vac), data = data, color = "#2E9FDF",
+ggsurvplot(survfit(res.cox_vac), data = data, palette = "#2E9FDF",
            ggtheme = theme_minimal())
 ```
 
@@ -424,7 +424,7 @@ ggsurvplot(survfit(res.cox_vac), data = data, color = "#2E9FDF",
 #skewed data 
 res.cox_vac <- coxph(Surv(time_skewed,vac_update)~variant, data = data[data$hos==2 & data$vac_update == 1,])
 summary(res.cox_vac)
-ggsurvplot(survfit(res.cox_vac), data = data, color = "#2E9FDF",
+ggsurvplot(survfit(res.cox_vac), data = data, palette = "#2E9FDF",
            ggtheme = theme_minimal())
 ```
 
@@ -435,7 +435,7 @@ ggsurvplot(survfit(res.cox_vac), data = data, color = "#2E9FDF",
 #skewed data 
 res.cox_vac <- coxph(Surv(time_skewed,vac_update)~variant, data = data[data$hos==2 & data$vac_update == 2,])
 summary(res.cox_vac)
-ggsurvplot(survfit(res.cox_vac), data = data, color = "#2E9FDF",
+ggsurvplot(survfit(res.cox_vac), data = data, palette = "#2E9FDF",
            ggtheme = theme_minimal())
 ```
 
