@@ -16,6 +16,12 @@ output:
     code_folding: hide
 ---
 
+# TO DO
+
+* combine sample command with probability in the example below 57% 0 43% 1
+* can be used for male/female
+* `sex1[ahi_bl==0] <- sample(c(0,1), sum(ahi_bl==0), prob=c(0.57, 0.43), replace=TRUE)`
+
 # Data Simulation
 
 * variable hospitalization: in this case random assignment may not be the best way because symptomatic disease progression would lead to higher hospitalization rates than aysmptomatic disease progression
