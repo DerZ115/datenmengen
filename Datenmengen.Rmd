@@ -35,192 +35,198 @@ output:
   + tried something but its random and doesnt take other variables into account
 
 ```{r}
+
+library(tidyverse)
+library(fitdistrplus)
+
 #set.seed
 set.seed(123)
 
+# alpha
 
-#variant from tab1
-alpha <- replicate(34656,"alpha")
-delta <- replicate(8682,"delta")
-variant <- sample(c(alpha, delta),replace = TRUE)
+alpha.hosp <- data.frame(hosp=rep(TRUE, 764),
+                         hosp_er=TRUE)
 
-data <- data.frame(
-  variant = c(alpha, delta),replace = TRUE)
+alpha.er <- data.frame(hosp=rep(FALSE, 1448-764),
+                       hosp_er=TRUE)
 
-#symptom status
-asymptomatic_alpha <- replicate(14934,"asymptomatic")
-symptomatic_alpha <- replicate(17757,"symptomatic")
-unknown_alpha <- replicate(1965,"unknown")
-asymptomatic_delta <- replicate(3659,"asymptomatic")
-symptomatic_delta <- replicate(4334,"symptomatic")
-unknown_delta <- replicate(689,"unknown")
-
-stat_alpha <- c(asymptomatic_alpha,symptomatic_alpha,unknown_alpha)
-stat_alpha <- sample(stat_alpha)
-stat_delta <- c(asymptomatic_delta,symptomatic_delta,unknown_delta)
-stat_delta <- sample(stat_delta)
-
-data$stat <- ifelse(data$variant == "alpha", stat_alpha, stat_delta)
-
-#check if it is correct
-table(subset(data,variant="alpha"))
-
-#hospitalisation
-h_alpha <- replicate(764,"HOS")
-h_delta <- replicate(196,"HOS")
-er_alpha <- replicate(1148,"ER") #er = emergency care
-er_delta <- replicate(498,"ER")
-
-hos_alpha <- c(h_alpha,er_alpha)
-hos_alpha <- sample(hos_alpha)
-
-hos_delta <- c(h_delta,er_delta)
-hos_delta <- sample(hos_delta)
-
-#in this case random assignment isn't the best way because symptomatic disease progression would lead to higher hospitalization rates than aysmptomatic disease progression
-data$hos=""
-data$hos[sample(which(data$variant == "alpha"),length(hos_alpha))] <- hos_alpha
-data$hos[sample(which(data$variant == "delta"),length(hos_delta))] <- hos_delta
-
-#--------------------------------------------------------------------
-######hospitalisation
-
-#use categorial variables
-h_alpha <- replicate(764,"HOS")
-h_delta <- replicate(196,"HOS")
-er_alpha <- replicate(1148,"ER") #er = emergency care
-er_delta <- replicate(498,"ER")
-
-#use integers 0=no hospitalisation, 1=hos, 2=er -> needed for cox regression
-#1: Hospital admission within 14 days after specimen
-#2: Hospital admission or emergency care attendance within 14 days after specimen
-h_alpha <- replicate(764,1)
-h_delta <- replicate(196,1)
-er_alpha <- replicate(1148,2) #er = emergency care
-er_delta <- replicate(498,2)
-
-#combine and sample variable
-hos_alpha <- c(h_alpha,er_alpha)
-hos_alpha <- sample(hos_alpha)
-hos_delta <- c(h_delta,er_delta)
-hos_delta <- sample(hos_delta)
-
-#in this case random assignment isn't the best way because symptomatic disease progression would lead to higher hospitalization rates than aysmptomatic disease progression
-data$hos=0
-data$hos[sample(which(data$variant == "alpha"),length(hos_alpha))] <- hos_alpha
-data$hos[sample(which(data$variant == "delta"),length(hos_delta))] <- hos_delta
-
-#-------------------------------------------------------------------
-#create time of hospitalisation
-#article days symptoms to admission hospital
-#https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7589278/
-#because of this maybe skewed might be more suitable
-#only people which are hospitaled get values all which data$hos==0 get a 0 value
-data$time_equal=0
-#equally distributed
-data$time_equal[which(data$hos==1 | data$hos==2)]<-sample(5:14,length(hos_alpha)+length(hos_delta),replace = TRUE)
-#right skewed
-data$time_skewed=0
-data$time_skewed[which(data$hos==1 | data$hos==2)]<-sample(rbeta((length(hos_alpha)+length(hos_delta)),2,6)*14)
-#right skewed v002
-# a bit different to get rid of hospitalzation on day 0-2
-data$time_skewed_v002=0
-data$time_skewed_v002[which(data$hos==1 | data$hos==2)]<-sample(rbeta((length(hos_alpha)+length(hos_delta)),2,6)*12+2)
+alpha.rest <- data.frame(hosp=rep(FALSE, 34656-1448),
+                         hosp_er=FALSE)
 
 
-#---------------------------------
-#vaccination status
-#Unvaccinated                                 0
-#<21 days after first vaccination dose        1
-#≥21 days after first vaccination dose        2
-#≥14 days after second vaccination dose       3
-vac_alpha <- replicate(25823,0)
-vac_alpha <- c(vac_alpha,replicate(2206,1))
-vac_alpha <- c(vac_alpha,replicate(6172,2))
-vac_alpha <- c(vac_alpha,replicate(455,3))
-vac_alpha <- sample(vac_alpha)
-vac_delta <- replicate(6255,0)
-vac_delta <- c(vac_delta,replicate(426,1))
-vac_delta <- c(vac_delta,replicate(1662,2))
-vac_delta <- c(vac_delta,replicate(339,3))
-vac_delta <- sample(vac_delta)
+age.groups <- data.frame(left=c(rep(0, 2671), 
+                                rep(10, 7373), 
+                                rep(20, 6183), 
+                                rep(30, 7364), 
+                                rep(40, 5588), 
+                                rep(50, 3196), 
+                                rep(60, 1375), 
+                                rep(70, 495), 
+                                rep(80, 411)),
+                         right=c(rep(10, 2671), 
+                                 rep(20, 7373), 
+                                 rep(30, 6183), 
+                                 rep(40, 7364), 
+                                 rep(50, 5588), 
+                                 rep(60, 3196), 
+                                 rep(70, 1375), 
+                                 rep(80, 495), 
+                                 rep(NA, 411)))
 
-data$vac=NA
-data$vac[sample(which(data$variant == "alpha"),length(vac_alpha))] <- vac_alpha
-data$vac[sample(which(data$variant == "delta"),length(vac_delta))] <- vac_delta
-#check if it is correct
-#table(data$vac[which(data$variant=="alpha")])
-#table(data$vac[which(data$variant=="delta")])
-data$vac_update <- data$vac
-data$vac_update[data$vac<1]<-1
-data$vac_update[data$vac>2]<-2
 
-#-----------------------------------------------------------
-#sex
-#it seems that men are more affected than women
-#In the public data set, the number of men who died from COVID-19 is 2.4 times that of women 
-#https://www.worldometers.info/coronavirus/coronavirus-age-sex-demographics/
-#https://www.frontiersin.org/articles/10.3389/fpubh.2020.00152/full
-#https://www.nature.com/articles/s41467-020-19741-6
-#now the code randomly assings male and female to the status and didnt account for the statement above
-female_alpha <- replicate(17913,1)
-female_delta <- replicate(4249,1)
-male_alpha <- replicate(16743,2)
-male_delta <- replicate(4433,2)
-sex_delta <- c(female_delta,male_delta)
-sex_delta <- sample(sex_delta)
-sex_alpha <- c(female_alpha,male_alpha)
-sex_alpha <- sample(sex_alpha)
+dist <- fitdistcens(age.groups, "gamma")
+summary(dist)
+a <- dist$estimate["shape"]
+b <- dist$estimate["rate"]
 
-data$sex=0
-data$sex[sample(which(data$variant == "alpha"),length(sex_alpha))] <- sex_alpha
-data$sex[sample(which(data$variant == "delta"),length(sex_delta))] <- sex_delta
+curve(dgamma(x, a*1.2, b), from = 0, to = 100)
 
-#check if it is correct
-#table(data$sex[which(data$variant=="alpha")])
-#table(data$sex[which(data$variant=="delta")])
+alpha.hosp$age <- round(rgamma(nrow(alpha.hosp), a*1.2, b))
+alpha.er$age <- round(rgamma(nrow(alpha.er), a*1.1, b))
+alpha.rest$age <- round(rgamma(nrow(alpha.rest), a*0.95, b))
 
-#----------------------------------------------------------------
-#age
-a1 <- sample(0:9,3564, replace = TRUE)
-a2 <- sample(10:19,9462, replace = TRUE)
-a3 <- sample(20:29,7636, replace = TRUE)
-a4 <- sample(30:39,9157, replace = TRUE)
-a5 <- sample(40:49,6885, replace = TRUE)
-a6 <- sample(50:59,3916, replace = TRUE)
-a7 <- sample(60:69,1681, replace = TRUE)
-a8 <- sample(70:79,584, replace = TRUE)
-a9 <- sample(80:100,453, replace = TRUE)
-age <- c(a1,a2,a3,a4,a5,a6,a7,a8,a9)
-age <- sample(age)
-data$age <- age
+alpha.hosp$week <- sample(c(13:20), nrow(alpha.hosp), replace=T, 
+                          prob=c(23.9, 18.1, 14.5, 13.8, 11.7, 
+                                 9.4, 5.5, 3.1))
+
+alpha.er$week <- sample(c(13:20), nrow(alpha.er), replace=T, 
+                          prob=c(23.9, 18.1, 14.5, 13.8, 11.7, 
+                                 9.4, 5.5, 3.1))
+
+alpha.rest$week <- sample(c(13:20), nrow(alpha.rest), replace=T, 
+                          prob=c(21.5, 15.9, 13.3, 12.7, 11.9, 
+                                 10.7, 7.7, 6.3))
+
+alpha.hosp$vacc <- sample(c(TRUE, FALSE), 
+                          nrow(alpha.hosp), 
+                          replace=T, 
+                          prob=c(228, 536))
+
+alpha.er$vacc <- sample(c(TRUE, FALSE), 
+                        nrow(alpha.er), 
+                        replace=T, 
+                        prob=c(353-228, 1095-536))
+
+alpha.rest$vacc <- sample(c(TRUE, FALSE), 
+                          nrow(alpha.rest), 
+                          replace=T, 
+                          prob=c(6627-353, 28029-1095))
+
+alpha <- rbind(alpha.hosp, alpha.er, alpha.rest)
+
+hosp_er_time <- c(round(rweibull(1448, 2, 6)), rep(14, 33208))
+hosp_er_time[hosp_er_time>14] <- 14
+
+alpha$time <- hosp_er_time
+
+alpha$variant <- "alpha"
+
+# delta
+
+delta.hosp <- data.frame(hosp=rep(TRUE, 196),
+                         hosp_er=TRUE)
+
+delta.er <- data.frame(hosp=rep(FALSE, 498-196),
+                       hosp_er=TRUE)
+
+delta.rest <- data.frame(hosp=rep(FALSE, 8682-498),
+                         hosp_er=FALSE)
+
+
+age.groups <- data.frame(left=c(rep(0, 893), 
+                                rep(10, 2089), 
+                                rep(20, 1453), 
+                                rep(30, 1793), 
+                                rep(40, 1297), 
+                                rep(50, 720), 
+                                rep(60, 306), 
+                                rep(70, 89), 
+                                rep(80, 42)),
+                         right=c(rep(10, 893), 
+                                 rep(20, 2089), 
+                                 rep(30, 1453), 
+                                 rep(40, 1793), 
+                                 rep(50, 1297), 
+                                 rep(60, 720), 
+                                 rep(70, 306), 
+                                 rep(80, 89), 
+                                 rep(NA, 42)))
+
+
+dist <- fitdistcens(age.groups, "gamma")
+summary(dist)
+a <- dist$estimate["shape"]
+b <- dist$estimate["rate"]
+
+curve(dgamma(x, a, b), from = 0, to = 100)
+
+delta.hosp$age <- round(rgamma(nrow(delta.hosp), a*1.2, b))
+delta.er$age <- round(rgamma(nrow(delta.er), a*1.1, b))
+delta.rest$age <- round(rgamma(nrow(delta.rest), a*0.95, b))
+
+delta.hosp$week <- sample(c(13:20), nrow(delta.hosp), replace=T, 
+                          prob=c(0.2, 1, 1.7, 4.2, 7.1, 
+                                 15.7, 24.5, 45.5))
+
+delta.er$week <- sample(c(13:20), nrow(delta.er), replace=T, 
+                          prob=c(0.2, 1, 1.7, 4.2, 7.1, 
+                                 15.7, 24.5, 45.5))
+
+delta.rest$week <- sample(c(13:20), nrow(delta.rest), replace=T, 
+                          prob=c(0.1, 0.8, 1.5, 4.0, 7.3, 
+                                 16, 24.8, 46))
+
+delta.hosp$vacc <- sample(c(TRUE, FALSE), 
+                          nrow(delta.hosp), 
+                          replace=T, 
+                          prob=c(47, 149))
+
+delta.er$vacc <- sample(c(TRUE, FALSE), 
+                        nrow(delta.er), 
+                        replace=T, 
+                        prob=c(129-47, 369-149))
+
+delta.rest$vacc <- sample(c(TRUE, FALSE), 
+                          nrow(delta.rest), 
+                          replace=T, 
+                          prob=c(2001-129, 6681-369))
+
+delta <- rbind(delta.hosp, delta.er, delta.rest)
+
+hosp_er_time <- c(round(rweibull(498, 2, 6)), rep(14, 8682-498))
+hosp_er_time[hosp_er_time>14] <- 14
+
+delta$time <- hosp_er_time
+
+delta$variant <- "delta"
+
+data <- rbind(alpha, delta)
+data$variant = as.factor(data$variant)
+
+
+data <- data[sample(nrow(data)),]
+
+str(data)
 ```
+
 
 # Visualization 
 
 ```{r}
 library(ggplot2)
 #vaccination status
-p<-ggplot(data=data, aes(fill=factor(vac), x=variant, y=vac)) +
-  geom_bar(stat="identity")+
-  scale_fill_discrete(name = "Vac Status", labels = c("None", "<21d 1st dose", ">21d 1st dose",">14d 2nd dose"))+
+p <- ggplot(data=data, aes(fill=vacc, x=variant)) +
+  geom_bar() +
   ggtitle("Vaccination status at date of specimen")
-p
-#sex variant
-p<-ggplot(data=data, aes(fill=factor(sex), x=variant, y=sex)) +
-  geom_bar(stat="identity")+
-  scale_fill_discrete(name = "Sex", labels = c("Female", "Male"))+
-  ggtitle("Sex - Variant")
 p
 #time of hospitalisation
 p <- ggplot() +
-    geom_jitter(data=data[which(data$time_skewed>0),], aes(x=1, y=time_skewed, color=variant)) 
+    geom_jitter(data=data[which(data$hosp_er),], aes(x=variant, y=time, color=variant)) 
 p
 # age
-p<-ggplot(data, aes(x=age, fill=factor(sex))) +
-  geom_histogram(alpha = 0.5, position = "dodge")+
-  theme(legend.position="right")+
-  scale_fill_discrete(name = "Sex", labels = c("Female", "Male"))+
+p<-ggplot(data, aes(x=age)) +
+  geom_histogram() +
+  theme(legend.position="right") +
   ggtitle("Age Distribution")
 p
 ```
@@ -257,46 +263,34 @@ p
 library("survival")
 library("survminer")
 
-#example data
-# lung <- lung
-# head(lung)
-# res.cox <- coxph(Surv(time, status) ~ sex, data = lung)
-# res.cox
-# summary(res.cox)
+res.cox <- coxph(Surv(time,hosp) ~ variant, data = data)
+summary(res.cox)
+ggsurvplot(survfit(res.cox), data = data, palette = "#2E9FDF",
+           ggtheme = theme_minimal())
 
-#own data equal distributed
-res.cox_equal <- coxph(Surv(time_equal,hos)~variant, data = data)
-summary(res.cox_equal)
-ggsurvplot(survfit(res.cox_equal), data = data, palette = "#2E9FDF",
-           ggtheme = theme_minimal())
-#own data right skewed
-res.cox_skewed <- coxph(Surv(time_skewed,hos)~variant, data = data)
-summary(res.cox_skewed)
-ggsurvplot(survfit(res.cox_skewed), data = data, palette = "#2E9FDF",
-           ggtheme = theme_minimal())
-#own data right skewed
-res.cox_skewed_v002 <- coxph(Surv(time_skewed_v002,hos)~variant, data = data)
-summary(res.cox_skewed_v002)
-ggsurvplot(survfit(res.cox_skewed_v002), data = data, palette = "#2E9FDF",
+res.cox2 <- coxph(Surv(time,hosp_er) ~ variant, data = data)
+summary(res.cox2)
+ggsurvplot(survfit(res.cox2), data = data, palette = "#2E9FDF",
            ggtheme = theme_minimal())
 
 ```
 
 ```{r}
 # visualize hazard ratio
-ggforest(res.cox_skewed, data = data)
+ggforest(res.cox, data = data)
+ggforest(res.cox2, data = data)
 ```
 
 
 * Testing the [Assumptions](http://www.sthda.com/english/wiki/cox-model-assumptions)
   + p values should be higher than 0.05 (significance level)
 ```{r}
-test.ph <- cox.zph(res.cox_skewed)
+test.ph <- cox.zph(res.cox)
 test.ph
 ggcoxzph(test.ph)
-ggcoxdiagnostics(res.cox_skewed, type = "dfbeta",
+ggcoxdiagnostics(res.cox, type = "dfbeta",
                  linear.predictions = FALSE, ggtheme = theme_bw())
-ggcoxdiagnostics(res.cox_skewed, type = "deviance",
+ggcoxdiagnostics(res.cox, type = "deviance",
                  linear.predictions = FALSE, ggtheme = theme_bw())
 ```
 
@@ -312,19 +306,25 @@ ggcoxdiagnostics(res.cox_skewed, type = "deviance",
 
 ```{r message=FALSE, warning=FALSE}
 #---------------------------------------------------------------
-#Cox Regression
-#own data right skewed
-res.cox_skewed <- coxph(Surv(time_skewed,hos)~variant, data = data[data$hos==1,])
-summary(res.cox_skewed)
-# visualize hazard ratio
-ggforest(res.cox_skewed, data = data)
+res.cox3 <- coxph(Surv(time, hosp) ~ variant + strata(week), data = data)
+summary(res.cox3)
+
+# trace(ggforest, edit = TRUE)
+
+ggforest(res.cox3, data = data)
+
+
+res.cox4 <- coxph(Surv(time,hosp_er) ~ variant + strata(week), data = data)
+summary(res.cox4)
+
+ggforest(res.cox4, data = data)
 ```
 
 ```{r message=FALSE, warning=FALSE}
 #---------------------------------------------------------------
 #Cox Regression
 #own data right skewed
-res.cox_skewed <- coxph(Surv(time_skewed,hos)~variant, data = data[data$hos==2,])
+res. <- coxph(Surv(time_skewed,hos)~variant, data = data[data$hos==2,])
 summary(res.cox_skewed)
 # visualize hazard ratio
 ggforest(res.cox_skewed, data = data)
