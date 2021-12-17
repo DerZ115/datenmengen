@@ -16,12 +16,6 @@ output:
     code_folding: hide
 ---
 
-# TO DO
-
-* combine sample command with probability in the example below 57% 0 43% 1
-* can be used for male/female
-* `sex1[ahi_bl==0] <- sample(c(0,1), sum(ahi_bl==0), prob=c(0.57, 0.43), replace=TRUE)`
-
 # Data Simulation
 
 * variable hospitalization: in this case random assignment may not be the best way because symptomatic disease progression would lead to higher hospitalization rates than aysmptomatic disease progression
@@ -34,27 +28,59 @@ output:
 * age
   + tried something but its random and doesnt take other variables into account
 
-```{r}
-
+```{r import libraries}
 library(tidyverse)
 library(fitdistrplus)
+library(ggplot2)
+library(survival)
+library(survminer)
+```
 
+
+```{r setup}
 #set.seed
-set.seed(123)
 
+set.seed(653)
+
+# Initialize dataframes
 # alpha
 
-alpha.hosp <- data.frame(hosp=rep(TRUE, 764),
+alpha.hosp <- data.frame(variant=rep("alpha", 764),
+                         hosp=TRUE,
                          hosp_er=TRUE)
 
-alpha.er <- data.frame(hosp=rep(FALSE, 1448-764),
+alpha.er <- data.frame(variant=rep("alpha", 1448-764),
+                       hosp=FALSE,
                        hosp_er=TRUE)
 
-alpha.rest <- data.frame(hosp=rep(FALSE, 34656-1448),
+alpha.rest <- data.frame(variant=rep("alpha", 34656-1448),
+                         hosp=FALSE,
                          hosp_er=FALSE)
 
 
-age.groups <- data.frame(left=c(rep(0, 2671), 
+# delta
+
+delta.hosp <- data.frame(variant=rep("delta", 196),
+                         hosp=TRUE,
+                         hosp_er=TRUE)
+
+delta.er <- data.frame(variant=rep("delta", 498-196),
+                       hosp=FALSE,
+                       hosp_er=TRUE)
+
+delta.rest <- data.frame(variant=rep("delta", 8682-498),
+                         hosp=FALSE,
+                         hosp_er=FALSE)
+```
+
+To take the expected difference in age between hospitalized and non-hospitalized patients into account, we modeled the age as a beta distribution.
+The beta distribution is defined between 0 and 1, so when we scale it up by 100, we get a good range for peoples age.
+Then, we can adjust the shape parameter for different groups of patients to get different age distributions.
+
+```{r age}
+# alpha
+
+age.groups <- data.frame(left=c(rep(0, 2671), # From the paper
                                 rep(10, 7373), 
                                 rep(20, 6183), 
                                 rep(30, 7364), 
@@ -73,65 +99,20 @@ age.groups <- data.frame(left=c(rep(0, 2671),
                                  rep(80, 495), 
                                  rep(NA, 411)))
 
+dist.age <- fitdistcens(age.groups/100, "beta") # Model age distribution
+summary(dist.age)
+a <- dist.age$estimate["shape1"]
+b <- dist.age$estimate["shape2"]
 
-dist <- fitdistcens(age.groups, "gamma")
-summary(dist)
-a <- dist$estimate["shape"]
-b <- dist$estimate["rate"]
+curve(dbeta(x, a, b), from = 0, to = 1)
+curve(dbeta(x, a, b*0.5), from = 0, to = 1) # For hospitalized
+curve(dbeta(x, a, b*1.2), from = 0, to = 1) # For non-hosp.
 
-curve(dgamma(x, a*1.2, b), from = 0, to = 100)
-
-alpha.hosp$age <- round(rgamma(nrow(alpha.hosp), a*1.2, b))
-alpha.er$age <- round(rgamma(nrow(alpha.er), a*1.1, b))
-alpha.rest$age <- round(rgamma(nrow(alpha.rest), a*0.95, b))
-
-alpha.hosp$week <- sample(c(13:20), nrow(alpha.hosp), replace=T, 
-                          prob=c(23.9, 18.1, 14.5, 13.8, 11.7, 
-                                 9.4, 5.5, 3.1))
-
-alpha.er$week <- sample(c(13:20), nrow(alpha.er), replace=T, 
-                          prob=c(23.9, 18.1, 14.5, 13.8, 11.7, 
-                                 9.4, 5.5, 3.1))
-
-alpha.rest$week <- sample(c(13:20), nrow(alpha.rest), replace=T, 
-                          prob=c(21.5, 15.9, 13.3, 12.7, 11.9, 
-                                 10.7, 7.7, 6.3))
-
-alpha.hosp$vacc <- sample(c(TRUE, FALSE), 
-                          nrow(alpha.hosp), 
-                          replace=T, 
-                          prob=c(228, 536))
-
-alpha.er$vacc <- sample(c(TRUE, FALSE), 
-                        nrow(alpha.er), 
-                        replace=T, 
-                        prob=c(353-228, 1095-536))
-
-alpha.rest$vacc <- sample(c(TRUE, FALSE), 
-                          nrow(alpha.rest), 
-                          replace=T, 
-                          prob=c(6627-353, 28029-1095))
-
-alpha <- rbind(alpha.hosp, alpha.er, alpha.rest)
-
-hosp_er_time <- c(round(rweibull(1448, 2, 6)), rep(14, 33208))
-hosp_er_time[hosp_er_time>14] <- 14
-
-alpha$time <- hosp_er_time
-
-alpha$variant <- "alpha"
+alpha.hosp$age <- round(rbeta(nrow(alpha.hosp), a, b*0.5)*100)
+alpha.er$age <- round(rbeta(nrow(alpha.er), a, b*0.5)*100)
+alpha.rest$age <- round(rbeta(nrow(alpha.rest), a, b*1.2)*100)
 
 # delta
-
-delta.hosp <- data.frame(hosp=rep(TRUE, 196),
-                         hosp_er=TRUE)
-
-delta.er <- data.frame(hosp=rep(FALSE, 498-196),
-                       hosp_er=TRUE)
-
-delta.rest <- data.frame(hosp=rep(FALSE, 8682-498),
-                         hosp_er=FALSE)
-
 
 age.groups <- data.frame(left=c(rep(0, 893), 
                                 rep(10, 2089), 
@@ -153,28 +134,106 @@ age.groups <- data.frame(left=c(rep(0, 893),
                                  rep(NA, 42)))
 
 
-dist <- fitdistcens(age.groups, "gamma")
+dist <- fitdistcens(age.groups/100, "beta")
 summary(dist)
-a <- dist$estimate["shape"]
-b <- dist$estimate["rate"]
+a <- dist$estimate["shape1"]
+b <- dist$estimate["shape2"]
 
-curve(dgamma(x, a, b), from = 0, to = 100)
+curve(dbeta(x, a, b), from = 0, to = 1)
+curve(dbeta(x, a, b*0.5), from = 0, to = 1)
+curve(dbeta(x, a, b*1.2), from = 0, to = 1)
 
-delta.hosp$age <- round(rgamma(nrow(delta.hosp), a*1.2, b))
-delta.er$age <- round(rgamma(nrow(delta.er), a*1.1, b))
-delta.rest$age <- round(rgamma(nrow(delta.rest), a*0.95, b))
+delta.hosp$age <- round(rbeta(nrow(delta.hosp), a, b*0.5)*100)
+delta.er$age <- round(rbeta(nrow(delta.er), a, b*0.5)*100)
+delta.rest$age <- round(rbeta(nrow(delta.rest), a, b*1.2)*100)
+```
 
-delta.hosp$week <- sample(c(13:20), nrow(delta.hosp), replace=T, 
-                          prob=c(0.2, 1, 1.7, 4.2, 7.1, 
-                                 15.7, 24.5, 45.5))
+In the paper, the calendar week has a strong influence, as later hospitalizations might not be registered in the database yet. 
+We modeled the cases per week as a geometric distribution (discrete version of exponential)
+For alpha, which goes down in later weeks, this can be done directly after shifting the weeks so that the first week of the study (KW13) is defined as 0
+For delta, which increases over time, we inverted the time scale to fit the geometric distribution, then changed it back to normal to get the simulated data.
 
-delta.er$week <- sample(c(13:20), nrow(delta.er), replace=T, 
-                          prob=c(0.2, 1, 1.7, 4.2, 7.1, 
-                                 15.7, 24.5, 45.5))
+```{r week}
+# alpha
 
-delta.rest$week <- sample(c(13:20), nrow(delta.rest), replace=T, 
-                          prob=c(0.1, 0.8, 1.5, 4.0, 7.3, 
-                                 16, 24.8, 46))
+alpha.weeks <- c(rep(13, 7593),
+                 rep(14, 5568),
+                 rep(15, 4673),
+                 rep(16, 4431),
+                 rep(17, 4058),
+                 rep(18, 3608),
+                 rep(19, 2608),
+                 rep(20, 2177))
+
+dist.week <- fitdist(alpha.weeks-13, "geom") # Model cases per week as geometric distribution
+summary(dist.week)
+a <- dist.week$estimate["prob"]
+
+plot(c(0:7), dgeom(c(0:7), a))
+plot(c(0:7), dgeom(c(0:7), a*1.2)) # Hospitalized
+plot(c(0:7), dgeom(c(0:7), a*0.95)) # Non-hospitalized
+
+rgeomt <- function(n, range, prob) { # Truncate distribution to 7 weeks (KW 13 - 20)
+  F.a <- pgeom(min(range), prob=prob)
+  F.b <- pgeom(max(range), prob=prob)
+  
+  u <- runif(n, min=F.a, max=F.b)
+  
+  qgeom(u, prob=prob)
+}
+
+alpha.hosp$week <- round(rgeomt(nrow(alpha.hosp), c(0,7), a*1.25)+12)
+
+alpha.er$week <- round(rgeomt(nrow(alpha.er), c(0,7), a*1.05)+12)
+
+alpha.rest$week <- round(rgeomt(nrow(alpha.rest), c(0,7), a*0.95)+12)
+
+# Same for delta, but reversed
+
+delta.weeks <- c(rep(13, 13),
+                 rep(14, 67),
+                 rep(15, 133),
+                 rep(16, 343),
+                 rep(17, 632),
+                 rep(18, 1377),
+                 rep(19, 2144),
+                 rep(20, 3973))
+
+
+dist.week <- fitdist(-delta.weeks+20, "geom")
+summary(dist.week)
+a <- dist.week$estimate["prob"]
+
+plot(c(7:0), dgeom(c(0:7), a))
+plot(c(7:0), dgeom(c(0:7), a*0.8))
+plot(c(7:0), dgeom(c(0:7), a*1.05))
+
+
+delta.hosp$week <- round(-(rgeomt(nrow(delta.hosp), c(0,7), a*0.80)-20))
+
+delta.er$week <- round(-(rgeomt(nrow(delta.er), c(0,7), a*0.95)-20))
+
+delta.rest$week <- round(-(rgeomt(nrow(delta.rest), c(0,7), a*1.05)-20))
+```
+The number of hospitalized and non-hospitalized patients by vaccination status is given in the paper, so no modeling is needed.
+
+```{r vaccination}
+# Numbers directly from paper, no modeling needed
+alpha.hosp$vacc <- sample(c(TRUE, FALSE), 
+                          nrow(alpha.hosp), 
+                          replace=T, 
+                          prob=c(228, 536))
+
+alpha.er$vacc <- sample(c(TRUE, FALSE), 
+                        nrow(alpha.er), 
+                        replace=T, 
+                        prob=c(353-228, 1095-536))
+
+alpha.rest$vacc <- sample(c(TRUE, FALSE), 
+                          nrow(alpha.rest), 
+                          replace=T, 
+                          prob=c(6627-353, 28029-1095))
+
 
 delta.hosp$vacc <- sample(c(TRUE, FALSE), 
                           nrow(delta.hosp), 
@@ -190,21 +249,51 @@ delta.rest$vacc <- sample(c(TRUE, FALSE),
                           nrow(delta.rest), 
                           replace=T, 
                           prob=c(2001-129, 6681-369))
+```
+
+To model the time of hospitalization, we used the Weibull distribution, which is often used for survival rates. 
+We assumed an average time from diagnosis to hospitalization of 5-6 days and a right-leaning distribution.
+See [article](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7589278/)
+
+```{r combine data}
+alpha <- rbind(alpha.hosp, alpha.er, alpha.rest)
+
+# Weibull distribution for modeling survival rates
+# On avg. 6 days to hospitalization
+# Max. 14 days
+# Non-hospitalized set to 14
+
+rweibullt <- function(n, range, shape, scale=1) { # Truncate distribution to 7 weeks (KW 13 - 20)
+  F.a <- pweibull(min(range), shape=shape, scale=scale)
+  F.b <- pweibull(max(range), shape=shape, scale=scale)
+  
+  u <- runif(n, min=F.a, max=F.b)
+  
+  qweibull(u, shape=shape, scale=scale)
+}
+
+hosp_er_time <- c(round(rweibullt(1448, c(0,14), 2, 5)), rep(14, 33208)) 
+
+alpha$time <- hosp_er_time
+
 
 delta <- rbind(delta.hosp, delta.er, delta.rest)
 
-hosp_er_time <- c(round(rweibull(498, 2, 6)), rep(14, 8682-498))
-hosp_er_time[hosp_er_time>14] <- 14
+hosp_er_time <- c(round(rweibullt(498, c(0,14), 2, 5)), rep(14, 8682-498))
 
 delta$time <- hosp_er_time
 
-delta$variant <- "delta"
 
 data <- rbind(alpha, delta)
 data$variant = as.factor(data$variant)
 
-
 data <- data[sample(nrow(data)),]
+
+data$age_group <- cut(data$age, 
+                      breaks=c(0, 10, 20, 30, 40, 50, 60, 70, 80, 100), 
+                      labels=c("0-10", "10-19", "20-29", "30-39", "40-49", 
+                               "50-59", "60-69", "70-79", ">80"),
+                      include.lowest = TRUE, ordered_result = TRUE, right = FALSE)
 
 str(data)
 ```
@@ -213,22 +302,30 @@ str(data)
 # Visualization 
 
 ```{r}
-library(ggplot2)
+
 #vaccination status
 p <- ggplot(data=data, aes(fill=vacc, x=variant)) +
-  geom_bar() +
+  geom_bar(position="dodge") +
   ggtitle("Vaccination status at date of specimen")
 p
 #time of hospitalisation
-p <- ggplot() +
-    geom_jitter(data=data[which(data$hosp_er),], aes(x=variant, y=time, color=variant)) 
+p <- ggplot(data=data[which(data$hosp_er),], aes(x=time)) +
+    geom_bar(position="dodge")
 p
 # age
 p<-ggplot(data, aes(x=age)) +
-  geom_histogram() +
+  geom_density() +
+  geom_density(aes(col=hosp))
   theme(legend.position="right") +
   ggtitle("Age Distribution")
 p
+
+# calendar week
+p <- ggplot(data=data, aes(fill=variant, x=week)) +
+  geom_bar() +
+  ggtitle("Calendar Week")
+p
+
 ```
 
 
@@ -240,76 +337,68 @@ p
 * [Creating Survival Plots - Cheat Sheet](https://raw.githubusercontent.com/rstudio/cheatsheets/main/survminer.pdf)
 * [CoxRegression nice plotting example](https://rviews.rstudio.com/2017/09/25/survival-analysis-with-r/)
 
-## Cox Regression Table2
+```{r include=FALSE}
+# ggforest doesnt work with stratified models
+# To fix it, copy the code in the following if statement, then run th cell. 
+# Substitute line 10-25 (allTerms <- ...) with the copied code, then save
 
-* MISSING: adjusted p value: regression adjustment for 
-  + age (linear)
-  + date (linear)
-  + sex
-  + index of multiple deprivation
-  + and international traveller status.
+if (FALSE) {
+  ### Copy from here
+  allTerms <- lapply(seq_along(terms), function(i) {
+    var <- names(terms)[i]
+    if(var %in% colnames(data)) {
+      if (terms[i] %in% c("factor", "character")) {
+        adf <- as.data.frame(table(data[, var]))
+        cbind(var = var, adf, pos = 1:nrow(adf))
+      }
+      else if (terms[i] == "numeric") {
+        data.frame(var = var, Var1 = "", Freq = nrow(data), 
+                   pos = 1)
+      }
+      else {
+        vars = grep(paste0("^", var, "*."), coef$term, 
+                    value = TRUE)
+        data.frame(var = vars, Var1 = "", Freq = nrow(data), 
+                   pos = seq_along(vars))
+      }
+    } else {
+      message(var, "is not found in data columns, and will be skipped.")
+    }
+  
+  })
+  ### To here
+}
 
-### Frist try
+trace(ggforest, edit=T)
 
-* table2 I used 0,1,2 for hospitalization
-* but it should be 2 models 0-1 and 0-2
-* in this first try I tested 3 different time simulations: equal, skewed, skewed_v002 
-* for this first try I also tested the assumptions
+```
+
+## Variant only
+
+For hospitalization we do not see a significant increase in hazard, while for hospitalization + ER we see a moderate hazard ratio (HR) of 1.4.
 
 ```{r message=FALSE, warning=FALSE}
 #---------------------------------------------------------------
 #Cox Regression
 
-library("survival")
-library("survminer")
-
 res.cox <- coxph(Surv(time,hosp) ~ variant, data = data)
 summary(res.cox)
-ggsurvplot(survfit(res.cox), data = data, palette = "#2E9FDF",
-           ggtheme = theme_minimal())
+ggforest(res.cox, data = data)
 
 res.cox2 <- coxph(Surv(time,hosp_er) ~ variant, data = data)
 summary(res.cox2)
-ggsurvplot(survfit(res.cox2), data = data, palette = "#2E9FDF",
-           ggtheme = theme_minimal())
-
-```
-
-```{r}
-# visualize hazard ratio
-ggforest(res.cox, data = data)
 ggforest(res.cox2, data = data)
+
 ```
 
+## Variant + Calendar week
 
-* Testing the [Assumptions](http://www.sthda.com/english/wiki/cox-model-assumptions)
-  + p values should be higher than 0.05 (significance level)
-```{r}
-test.ph <- cox.zph(res.cox)
-test.ph
-ggcoxzph(test.ph)
-ggcoxdiagnostics(res.cox, type = "dfbeta",
-                 linear.predictions = FALSE, ggtheme = theme_bw())
-ggcoxdiagnostics(res.cox, type = "deviance",
-                 linear.predictions = FALSE, ggtheme = theme_bw())
-```
-
-### Second try
-
-* here I built 2 models which is exactly what we want 
-* first model uses hos==1 
-  + in the paper they get a HR of 1·03 (0·88–1·21)
-  + we got 0.9608 (0.8208-1.125)
-* second model uses Hos==2
-  + in the paper they get a HR of 1·39 (1·25–1·53)
-  + we got 1.121 (1.009-1.246)
+Here, we stratified the model by calendar week. This leads to an increased HR. The likely reason is that delta is more prevalent in later weeks, in which the data on hospitalization might not be complete yet. As a result, the HR of delta was underestimated before.
 
 ```{r message=FALSE, warning=FALSE}
 #---------------------------------------------------------------
 res.cox3 <- coxph(Surv(time, hosp) ~ variant + strata(week), data = data)
 summary(res.cox3)
-
-# trace(ggforest, edit = TRUE)
 
 ggforest(res.cox3, data = data)
 
@@ -320,14 +409,23 @@ summary(res.cox4)
 ggforest(res.cox4, data = data)
 ```
 
+## + Vaccination & Age group
+
+Including these two additional factors in stratification, we only see small changes to the HR.
+
 ```{r message=FALSE, warning=FALSE}
 #---------------------------------------------------------------
 #Cox Regression
 #own data right skewed
-res. <- coxph(Surv(time_skewed,hos)~variant, data = data[data$hos==2,])
-summary(res.cox_skewed)
+res.cox5 <- coxph(Surv(time, hosp) ~ variant + strata(week) + strata(vacc), data=data)
+summary(res.cox5)
 # visualize hazard ratio
-ggforest(res.cox_skewed, data = data)
+ggforest(res.cox5, data = data)
+
+res.cox6 <- coxph(Surv(time, hosp_er) ~ variant + strata(week) + strata(vacc), data=data)
+summary(res.cox6)
+# visualize hazard ratio
+ggforest(res.cox6, data = data)
 ```
 
 ### Table 2 - adjusted p values
@@ -335,126 +433,30 @@ ggforest(res.cox_skewed, data = data)
 * here I only simulated sex and take this into account
 
 ```{r message=FALSE, warning=FALSE}
-#res.cox <- coxph(Surv(time, status) ~ age + sex + ph.ecog, data =  lung)
+#Cox Regression
 #own data right skewed
-res.cox_skewed <- coxph(Surv(time_skewed,hos,sex)~variant, data = data[data$hos==1,])
-summary(res.cox_skewed)
+res.cox7 <- coxph(Surv(time, hosp) ~ variant + strata(week) + strata(vacc) + strata(age_group), data=data)
+summary(res.cox7)
 # visualize hazard ratio
-ggforest(res.cox_skewed, data = data)
+ggforest(res.cox7, data = data)
+
+res.cox8 <- coxph(Surv(time, hosp_er) ~ variant + strata(week) + strata(vacc) + strata(age_group), data=data)
+summary(res.cox8)
+# visualize hazard ratio
+ggforest(res.cox8, data = data)
 ```
 
 
-## Cox Regression Table 3
-
-### Used hos=1 and vac<2
-
-* hos=1:
-* vac<2 means: Unvaccinated or <21 days after first vaccination dose
-* don't know which one is correct: data$vac contains 0 and 1 and I put all 0 and 1 in a new column vac_update and coded it with 1 -> this leads to different results
+Testing the [Assumptions](http://www.sthda.com/english/wiki/cox-model-assumptions)
+p-values should be higher than 0.05 (significance level) --> no significant difference from assumptions
 
 ```{r}
-#skewed data 
-#skewed data 
-res.cox_vac <- coxph(Surv(time_skewed,vac)~variant, data = data[data$hos==1 & data$vac <2,])
-summary(res.cox_vac)
-ggsurvplot(survfit(res.cox_vac), data = data, palette = "#2E9FDF",
-           ggtheme = theme_minimal())
-```
+test.ph <- cox.zph(res.cox7)
+test.ph
+ggcoxzph(test.ph)
 
-### used hos=1 and vac_update == 1
-
-```{r}
-#skewed data 
-#skewed data 
-res.cox_vac <- coxph(Surv(time_skewed,vac_update)~variant, data = data[data$hos==1 & data$vac_update == 1,])
-summary(res.cox_vac)
-ggsurvplot(survfit(res.cox_vac), data = data, palette = "#2E9FDF",
-           ggtheme = theme_minimal())
-```
-
-### used hos=1 and vac_update == 2
-
-```{r}
-#skewed data 
-#skewed data 
-res.cox_vac <- coxph(Surv(time_skewed,vac_update)~variant, data = data[data$hos==1 & data$vac_update == 2,])
-summary(res.cox_vac)
-ggsurvplot(survfit(res.cox_vac), data = data, palette = "#2E9FDF",
-           ggtheme = theme_minimal())
-```
-
-### used hos=2 and vac<2
-
-* hos=2:
-* vac<2 means: Unvaccinated or <21 days after first vaccination dose
-
-```{r}
-#skewed data 
-res.cox_vac <- coxph(Surv(time_skewed,vac)~variant, data = data[data$hos==2 & data$vac <2,])
-summary(res.cox_vac)
-ggsurvplot(survfit(res.cox_vac), data = data, palette = "#2E9FDF",
-           ggtheme = theme_minimal())
-```
-
-### hos =1 vac == 2
-* hos=1:
-* vac>1 means: ≥21 days after first vaccination dose with or without second vaccination dose
-* `data$vac > 2` this doesn't work yet but don't know why 
-* `data$vac == 2` works but I think we also want `data$vac==3`
-
-```{r}
-#skewed data 
-res.cox_vac <- coxph(Surv(time_skewed,vac)~variant, data = data[data$hos==1 & data$vac == 2,])
-summary(res.cox_vac)
-ggsurvplot(survfit(res.cox_vac), data = data, palette = "#2E9FDF",
-           ggtheme = theme_minimal())
-```
-
-### hos=2 vac ==2
-* hos=2:
-* vac>1 means: ≥21 days after first vaccination dose with or without second vaccination dose
-* same as above >2 doesn't work
-
-```{r}
-#skewed data 
-res.cox_vac <- coxph(Surv(time_skewed,vac)~variant, data = data[data$hos==2 & data$vac==2,])
-summary(res.cox_vac)
-ggsurvplot(survfit(res.cox_vac), data = data, palette = "#2E9FDF",
-           ggtheme = theme_minimal())
-```
-
-### used hos=2 and vac_update == 1
-
-```{r}
-#skewed data 
-#skewed data 
-res.cox_vac <- coxph(Surv(time_skewed,vac_update)~variant, data = data[data$hos==2 & data$vac_update == 1,])
-summary(res.cox_vac)
-ggsurvplot(survfit(res.cox_vac), data = data, palette = "#2E9FDF",
-           ggtheme = theme_minimal())
-```
-
-### used hos=2 and vac_update == 2
-
-```{r}
-#skewed data 
-#skewed data 
-res.cox_vac <- coxph(Surv(time_skewed,vac_update)~variant, data = data[data$hos==2 & data$vac_update == 2,])
-summary(res.cox_vac)
-ggsurvplot(survfit(res.cox_vac), data = data, palette = "#2E9FDF",
-           ggtheme = theme_minimal())
-```
-
-# DRAFT Code for Age
-
-```{r eval=FALSE, include=FALSE}
-#-----------------------------------------------
-#draft
-#age
-age_n <- c(3564,9462,7636,9157,6885,3916,1681,584,453)
-age_d <- c("<10","10-19","20-29","30-39","40-49","50-59","60-69","70-79",">80")
-for (i in seq(from=1, to=length(age_d))){
-  replicate(age_n[i],age_d[i])
-}
+test.ph2 <- cox.zph(res.cox8)
+test.ph2
+ggcoxzph(test.ph2)
 ```
 
