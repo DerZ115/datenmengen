@@ -1,32 +1,12 @@
 ---
 title: "Datenmengen"
 author: "Daniel Zimmermann / David Lilek"
-output:
-  html_document:
-    df_print: paged
-    fig.align: center
-    self_contained: yes
-    fig.height: 4
-    fig.width: 8
-    theme: united
-    toc: yes
-    toc_depth: 4
-    toc_float: yes
-    number_sections: no
-    code_folding: hide
 ---
 
-# Data Simulation
+# IMPORTANT INFO
+The data simulation can't be rendered to html because the ggforest method has to edited manually.
 
-* variable hospitalization: in this case random assignment may not be the best way because symptomatic disease progression would lead to higher hospitalization rates than aysmptomatic disease progression
-* time from positive testing to hospital admission is needed for cox model
-  + found this [article](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7589278/)
-  + it is a bit age-depended but overall it seems to be right skewed
-  + [here](https://stackoverflow.com/questions/28099590/create-sample-vector-data-in-r-with-a-skewed-distribution-with-limited-range) i found how to create skewed data-sets
-* sex
-  + it seems as stated below in the comments than men are higher affected than women but don't know yet how to consider this in a useful way
-* age
-  + tried something but its random and doesnt take other variables into account
+# Data Simulation
 
 ```{r import libraries}
 library(tidyverse)
@@ -35,7 +15,6 @@ library(ggplot2)
 library(survival)
 library(survminer)
 ```
-
 
 ```{r setup}
 #set.seed
@@ -215,6 +194,7 @@ delta.er$week <- round(-(rgeomt(nrow(delta.er), c(0,7), a*0.95)-20))
 
 delta.rest$week <- round(-(rgeomt(nrow(delta.rest), c(0,7), a*1.05)-20))
 ```
+
 The number of hospitalized and non-hospitalized patients by vaccination status is given in the paper, so no modeling is needed.
 
 ```{r vaccination}
@@ -409,14 +389,13 @@ summary(res.cox4)
 ggforest(res.cox4, data = data)
 ```
 
-## + Vaccination & Age group
+## + Vaccination & Week
 
 Including these two additional factors in stratification, we only see small changes to the HR.
 
 ```{r message=FALSE, warning=FALSE}
 #---------------------------------------------------------------
 #Cox Regression
-#own data right skewed
 res.cox5 <- coxph(Surv(time, hosp) ~ variant + strata(week) + strata(vacc), data=data)
 summary(res.cox5)
 # visualize hazard ratio
@@ -428,9 +407,7 @@ summary(res.cox6)
 ggforest(res.cox6, data = data)
 ```
 
-### Table 2 - adjusted p values
-
-* here I only simulated sex and take this into account
+## + Vaccination & Week & Age group
 
 ```{r message=FALSE, warning=FALSE}
 #Cox Regression
@@ -446,6 +423,7 @@ summary(res.cox8)
 ggforest(res.cox8, data = data)
 ```
 
+## Testing assumption
 
 Testing the [Assumptions](http://www.sthda.com/english/wiki/cox-model-assumptions)
 p-values should be higher than 0.05 (significance level) --> no significant difference from assumptions
